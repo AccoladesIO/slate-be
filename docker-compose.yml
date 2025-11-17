@@ -1,0 +1,63 @@
+version: '3.9'
+
+services:
+  # ==========================
+  # Backend Application
+  # ==========================
+  app:
+    build: .
+    container_name: slate_app
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    command: pnpm start
+    networks:
+      - slate_network
+
+  # ==========================
+  # PostgreSQL Database
+  # ==========================
+  postgres:
+    image: postgres:15-alpine
+    container_name: slate_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - slate_postgres_data:/var/lib/postgresql/data
+    networks:
+      - slate_network
+
+  # ==========================
+  # Redis Cache / Queue
+  # ==========================
+  redis:
+    image: redis:7-alpine
+    container_name: slate_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - slate_network
+
+# ==========================
+# Volumes (persistent storage)
+# ==========================
+volumes:
+  slate_postgres_data:
+
+# ==========================
+# Network
+# ==========================
+networks:
+  slate_network:
+    driver: bridge

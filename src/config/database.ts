@@ -18,10 +18,10 @@ const sequelize = new Sequelize({
     ? {
         ssl: {
           require: true,
-          rejectUnauthorized: false, // needed for Koyeb
+          rejectUnauthorized: false,
         },
       }
-    : {}, // no SSL locally
+    : {}, 
 });
 
 export const connectDB = async () => {

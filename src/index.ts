@@ -13,7 +13,7 @@ import { syncDatabase } from "./models";
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 8000;
 const env = process.env.NODE_ENV || "development";
 
 // ────────────────────────────────

@@ -2,6 +2,7 @@ import sequelize from "../config/database";
 import User from "./user.model";
 import Presentation from "./presentation.model";
 import SharedPresentation from "./sharedPresentation.model";
+import ShareLink from "./shareLink.model";
 export const syncDatabase = async () => {
   try {
     await sequelize.sync({ alter: true });
@@ -11,4 +12,4 @@ export const syncDatabase = async () => {
   }
 };
 
-export { User, Presentation, SharedPresentation };
+export { User, Presentation, SharedPresentation, ShareLink };

@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import authRouter from "./router/authRoute";
 import presentationRouter from "./router/presentation.router";
 import sharingRouter from "./router/sharing.router";
+import shareLinkRouter from "./router/shareLink.router";
 import { connectDB } from "./config/database";
 import { syncDatabase } from "./models";
 
@@ -41,6 +42,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", authRouter);
 app.use("/api/presentation", presentationRouter);
 app.use("/api/sharing", sharingRouter);
+app.use("/api/share-link", shareLinkRouter);
 
 app.get("/", (_req: Request, res: Response) => {
   res.status(200).send("🚀 Slate API is live!");

@@ -19,7 +19,7 @@ const env = process.env.NODE_ENV || "development";
 // ────────────────────────────────
 // Middleware
 // ────────────────────────────────
-const allowedOrigins = ["https://your-frontend-domain.com", "http://localhost:3000"];
+const allowedOrigins = ["https://myslate.vercel.app", "http://localhost:3000"];
 
 app.use(
   cors({

@@ -11,381 +11,214 @@ interface SignupRequestBody {
     password: string;
 }
 
-export const SignupController = async (
-    req: Request<{}, {}, SignupRequestBody>,
-    res: Response,
-    next: NextFunction
-) => {
+const isProduction = process.env.NODE_ENV === "production";
+
+export const SignupController = async (req: Request<{}, {}, SignupRequestBody>, res: Response) => {
     const { email, name, password } = req.body;
 
     try {
         const { error } = signupSchema.validate({ email, name, password });
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: error.details[0].message,
-            });
-        }
+        if (error) return res.status(400).json({ success: false, message: error.details[0].message });
 
-        // Check for existing user
-        const existingUser = await User.findOne({
-            where: { email },
-            attributes: ['id']
-        });
+        const existingUser = await User.findOne({ where: { email }, attributes: ['id'] });
+        if (existingUser) return res.status(409).json({ success: false, message: 'Account exists' });
 
-        if (existingUser) {
-            return res.status(409).json({
-                success: false,
-                message: 'An account with this email already exists',
-            });
-        }
-
-        // Hash password
         const hashedPassword = await doHash(password, 12);
+        const newUser = await User.create({ name, email, password: hashedPassword, verified: false });
 
-        // Create new user
-        const newUser = await User.create({
-            name,
-            email,
-            password: hashedPassword,
-            verified: false,
-        });
+        sendWelcomeEmail(newUser.email, newUser.name).catch(console.error);
 
-        sendWelcomeEmail(newUser.email, newUser.name).catch(err =>
-            console.error('Failed to send welcome email:', err)
-        );
-
-        return res.status(201).json({
-            success: true,
-            message: 'Account created successfully!',
-            data: {
-                id: newUser.id,
-                email: newUser.email,
-                name: newUser.name,
-            },
-        });
+        return res.status(201).json({ success: true, message: 'Account created', data: { id: newUser.id, email: newUser.email, name: newUser.name } });
 
     } catch (error) {
-        console.error('Signup error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'A server error has occurred',
-        });
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Server error' });
     }
 };
 
-export const LoginController = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
+export const LoginController = async (req: Request, res: Response) => {
     const { email, password } = req.body;
 
     try {
         const { error } = signinSchema.validate({ email, password });
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: error.details[0].message,
-            });
-        }
+        if (error) return res.status(400).json({ success: false, message: error.details[0].message });
 
-        // Check for existing user
-        const existingUser = await User.findOne({ where: { email } });
-        if (!existingUser) {
-            return res.status(404).json({
-                success: false,
-                message: 'Invalid email or password',
-            });
-        }
+        const user = await User.findOne({ where: { email } });
+        if (!user) return res.status(404).json({ success: false, message: 'Invalid credentials' });
 
-        // Compare passwords
-        const isPasswordValid = await doHashValidation(password, existingUser.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password',
-            });
-        }
+        const valid = await doHashValidation(password, user.password);
+        if (!valid) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
-        // Generate JWT
-        const userToken = jwt.sign(
-            {
-                id: existingUser.id,
-                email: existingUser.email,
-            },
-            process.env.JWT_SECRET_KEY!,
-            {
-                expiresIn: '8h',
-            }
-        );
+        const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET_KEY!, { expiresIn: '8h' });
 
-        res.cookie("token", userToken, {
+        res.cookie("token", token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
             path: "/",
-            maxAge: 8 * 3600000,
+            maxAge: 8 * 3600 * 1000,
         });
 
+        sendLoginNotification(user.email, user.name).catch(console.error);
 
-        sendLoginNotification(existingUser.email, existingUser.name).catch(err =>
-            console.error('Failed to send login notification:', err)
-        );
-
-        return res.status(200).json({
-            success: true,
-            message: 'Login successful',
-            data: {
-                id: existingUser.id,
-                email: existingUser.email,
-                name: existingUser.name,
-                verified: existingUser.verified,
-            },
-        });
+        return res.status(200).json({ success: true, message: 'Login successful', data: { id: user.id, email: user.email, name: user.name, verified: user.verified } });
 
     } catch (error) {
-        console.error('Login error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'A server error has occurred',
-        });
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Server error' });
     }
 };
 
-export const SignOutController = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    res.clearCookie('Authorization').status(200).json({
-        success: true,
-        message: 'Signout successful',
-    });
+export const SignOutController = async (req: Request, res: Response) => {
+    res.clearCookie("token", { httpOnly: true, secure: isProduction, sameSite: isProduction ? "none" : "lax", path: "/" })
+       .status(200).json({ success: true, message: 'Signout successful' });
 };
 
-export const sendAccountVerificationCodeController = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
+export const sendAccountVerificationCodeController = async (req: Request, res: Response) => {
     const { email } = req.body;
-
     try {
-        if (!email) {
-            return res.status(401).json({
-                success: false,
-                message: 'Email is missing',
-            });
-        }
+        if (!email) return res.status(401).json({ success: false, message: 'Email missing' });
 
-        const existingUser = await User.findOne({
-            where: { email },
-            attributes: ['id', 'email', 'verified'],
-        });
-
-        if (!existingUser) {
-            return res.status(404).json({
-                success: false,
-                message: 'An account with this email does not exist',
-            });
-        }
-
-        if (existingUser.verified) {
-            return res.status(400).json({
-                success: false,
-                message: 'Account is already verified',
-            });
-        }
+        const user = await User.findOne({ where: { email }, attributes: ['id', 'email', 'verified'] });
+        if (!user) return res.status(404).json({ success: false, message: 'Account does not exist' });
+        if (user.verified) return res.status(400).json({ success: false, message: 'Already verified' });
 
         const OTP = Math.floor(100000 + Math.random() * 900000).toString();
         const hashCode = await hmacProcess(OTP, process.env.HMAC_SECRET_KEY!);
 
-        // Update user with verification code
-        await User.update(
-            {
-                verificationCode: hashCode,
-                verificationCodeValidation: new Date().toISOString(),
-            },
-            { where: { id: existingUser.id } }
-        );
+        await User.update({ verificationCode: hashCode, verificationCodeValidation: new Date().toISOString() }, { where: { id: user.id } });
 
-        sendVerificationEmail(existingUser.email, OTP).catch(err =>
-            console.error('Failed to send verification email:', err)
-        );
+        sendVerificationEmail(user.email, OTP).catch(console.error);
 
-        // Return immediately
-        return res.status(200).json({
-            success: true,
-            message: 'Verification code is being sent to your email.',
-        });
+        return res.status(200).json({ success: true, message: 'Verification code sent' });
 
     } catch (error: any) {
-        console.error('Verification code error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to send verification code. Please try again later.',
-            error: error.message,
-        });
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Failed to send code', error: error.message });
     }
 };
 
-export const verifyAccountVerificationCodeController = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
+export const verifyAccountVerificationCodeController = async (req: Request, res: Response) => {
     const { email, code } = req.body;
 
     try {
         const { error } = validationCodeSchema.validate({ email, code });
-        if (error) {
-            return res.status(400).json({
-                success: false,
-                message: error.details[0].message,
-            });
-        }
+        if (error) return res.status(400).json({ success: false, message: error.details[0].message });
 
-        if (!email || !code) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email and code are required',
-            });
-        }
+        const user = await User.findOne({ where: { email } });
+        if (!user) return res.status(404).json({ success: false, message: 'Incorrect credentials' });
+        if (user.verified) return res.status(400).json({ success: false, message: 'Already verified' });
 
-        const isUserExist = await User.findOne({ where: { email } });
-        if (!isUserExist) {
-            return res.status(404).json({
-                success: false,
-                message: 'Incorrect credentials',
-            });
-        }
+        if (!user.verificationCode || !user.verificationCodeValidation) return res.status(400).json({ success: false, message: 'No code found' });
 
-        if (isUserExist.verified) {
-            return res.status(400).json({
-                success: false,
-                message: 'User is already verified',
-            });
-        }
+        const expiration = new Date(user.verificationCodeValidation).getTime() + 5 * 60 * 1000;
+        if (Date.now() > expiration) return res.status(400).json({ success: false, message: 'Code expired' });
 
-        if (!isUserExist.verificationCode || !isUserExist.verificationCodeValidation) {
-            return res.status(400).json({
-                success: false,
-                message: 'No verification code found',
-            });
-        }
+        const hashCode = await hmacProcess(code, process.env.HMAC_SECRET_KEY!);
+        if (hashCode !== user.verificationCode) return res.status(400).json({ success: false, message: 'Invalid OTP' });
 
-        const expirationTime = new Date(isUserExist.verificationCodeValidation).getTime() + 5 * 60 * 1000;
-        if (Date.now() > expirationTime) {
-            return res.status(400).json({
-                success: false,
-                message: 'Verification code has expired.',
-            });
-        }
+        user.verified = true;
+        user.verificationCode = null;
+        user.verificationCodeValidation = null;
+        await user.save();
 
-        const hashCode = await hmacProcess(code.toString(), process.env.HMAC_SECRET_KEY!);
-        if (hashCode !== isUserExist.verificationCode) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid OTP',
-            });
-        }
-
-        // Mark as verified
-        isUserExist.verified = true;
-        isUserExist.verificationCode = null;
-        isUserExist.verificationCodeValidation = null;
-        await isUserExist.save();
-
-        return res.status(200).json({
-            success: true,
-            message: 'Account verification successful.',
-        });
+        return res.status(200).json({ success: true, message: 'Account verified' });
 
     } catch (error) {
-        console.error('Verification error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'A server error occurred.',
-        });
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Server error' });
     }
 };
-
-export const sendForgotPasswordCodeController = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    const { email } = req.body;
-
-    try {
-        return res.status(200).json({
-            success: true,
-            message: 'OTP sent successfully',
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: 'An error occurred',
-        });
-    }
-};
-
-export const verifyForgotPasswordCodeController = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    const { email, code } = req.body;
-
-    try {
-        return res.status(200).json({
-            success: true,
-            message: 'Password reset successfully',
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: 'An error occurred',
-        });
-    }
-};
-
-export const ChangePasswordController = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    const { oldPassword, newPassword } = req.body;
-
-    try {
-        return res.status(200).json({
-            success: true,
-            message: 'Password reset successfully',
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: 'An error occurred',
-        });
-    }
-};
-
 
 export const MeController = async (req: Request, res: Response) => {
     try {
         const token = req.cookies.token;
-        if (!token) {
-            return res.status(401).json({ success: false, message: 'Unauthorized' });
-        }
+        if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
         const decoded: any = jwt.verify(token, process.env.JWT_SECRET_KEY!);
         const user = await User.findByPk(decoded.id, { attributes: ['id', 'email', 'name', 'verified'] });
-
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
         return res.status(200).json({ success: true, message: 'User fetched', data: user });
+
     } catch (err) {
         return res.status(401).json({ success: false, message: 'Session expired' });
+    }
+};
+
+// ---------- Password Reset Controllers ----------
+
+export const sendForgotPasswordCodeController = async (req: Request, res: Response) => {
+    const { email } = req.body;
+    try {
+        if (!email) return res.status(400).json({ success: false, message: 'Email missing' });
+
+        const user = await User.findOne({ where: { email } });
+        if (!user) return res.status(404).json({ success: false, message: 'Account does not exist' });
+
+        const OTP = Math.floor(100000 + Math.random() * 900000).toString();
+        const hashCode = await hmacProcess(OTP, process.env.HMAC_SECRET_KEY!);
+
+        await User.update({ verificationCode: hashCode, verificationCodeValidation: new Date().toISOString() }, { where: { id: user.id } });
+
+        sendVerificationEmail(user.email, OTP).catch(console.error);
+
+        return res.status(200).json({ success: true, message: 'OTP sent successfully' });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+export const verifyForgotPasswordCodeController = async (req: Request, res: Response) => {
+    const { email, code, newPassword } = req.body;
+    try {
+        if (!email || !code || !newPassword) return res.status(400).json({ success: false, message: 'Missing parameters' });
+
+        const user = await User.findOne({ where: { email } });
+        if (!user) return res.status(404).json({ success: false, message: 'Invalid credentials' });
+
+        const expiration = new Date(user.verificationCodeValidation!).getTime() + 5 * 60 * 1000;
+        if (Date.now() > expiration) return res.status(400).json({ success: false, message: 'OTP expired' });
+
+        const hashCode = await hmacProcess(code, process.env.HMAC_SECRET_KEY!);
+        if (hashCode !== user.verificationCode) return res.status(400).json({ success: false, message: 'Invalid OTP' });
+
+        user.password = await doHash(newPassword, 12);
+        user.verificationCode = null;
+        user.verificationCodeValidation = null;
+        await user.save();
+
+        return res.status(200).json({ success: true, message: 'Password reset successfully' });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+export const ChangePasswordController = async (req: Request, res: Response) => {
+    const { oldPassword, newPassword } = req.body;
+    const token = req.cookies.token;
+
+    try {
+        if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        const decoded: any = jwt.verify(token, process.env.JWT_SECRET_KEY!);
+        const user = await User.findByPk(decoded.id);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        const valid = await doHashValidation(oldPassword, user.password);
+        if (!valid) return res.status(401).json({ success: false, message: 'Old password incorrect' });
+
+        user.password = await doHash(newPassword, 12);
+        await user.save();
+
+        return res.status(200).json({ success: true, message: 'Password changed successfully' });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Server error' });
     }
 };

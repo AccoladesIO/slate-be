@@ -1,5 +1,5 @@
 import express from "express";
-import { ChangePasswordController, LoginController,  MeController,  sendAccountVerificationCodeController,  sendForgotPasswordCodeController,  SignupController, verifyAccountVerificationCodeController, verifyForgotPasswordCodeController } from "../controller/authController";
+import { ChangePasswordController, LoginController,  MeController,  sendAccountVerificationCodeController,  sendForgotPasswordCodeController,  SignOutController,  SignupController, verifyAccountVerificationCodeController, verifyForgotPasswordCodeController } from "../controller/authController";
 import { authMiddleware } from "../middleware/auth";
 
 const authRouter = express.Router();
@@ -18,6 +18,10 @@ authRouter.post("/forgot-password", sendForgotPasswordCodeController)
 authRouter.patch("/verify-forgot-password-code", verifyForgotPasswordCodeController)
 
 authRouter.patch("/change-password", ChangePasswordController)
+
+
+
+authRouter.post("/logout", SignOutController)
 
 
 

@@ -13,12 +13,12 @@ import { syncDatabase } from "./models";
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", 1); // ✅ Fix for cookies behind proxy (Koyeb, Vercel, etc.)
 const port = process.env.PORT || 8000;
 const env = process.env.NODE_ENV || "development";
 
 /**
  * Allowed origins for CORS.
- * @type {string[]}
  */
 const allowedOrigins = ["https://myslate.vercel.app", "http://localhost:3000"];
 
@@ -61,9 +61,6 @@ app.use("/api/share-link", shareLinkRouter);
 
 /**
  * Health check route.
- *
- * @param {Request} _req
- * @param {Response} res
  */
 app.get("/", (_req: Request, res: Response) => {
   res.status(200).send("🚀 Slate API is live!");
@@ -71,9 +68,6 @@ app.get("/", (_req: Request, res: Response) => {
 
 /**
  * 404 handler for unknown routes.
- *
- * @param {Request} _req
- * @param {Response} res
  */
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ success: false, message: "Route does not exist" });
@@ -81,11 +75,6 @@ app.use((_req: Request, res: Response) => {
 
 /**
  * Global error handler middleware.
- *
- * @param {Error} err
- * @param {Request} _req
- * @param {Response} res
- * @param {NextFunction} _next
  */
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error:", err);

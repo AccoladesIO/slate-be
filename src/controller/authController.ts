@@ -28,11 +28,11 @@ export const SignupController = async (
         }
 
         // Check for existing user
-        const existingUser = await User.findOne({ 
+        const existingUser = await User.findOne({
             where: { email },
-            attributes: ['id'] 
+            attributes: ['id']
         });
-        
+
         if (existingUser) {
             return res.status(409).json({
                 success: false,
@@ -51,7 +51,7 @@ export const SignupController = async (
             verified: false,
         });
 
-        sendWelcomeEmail(newUser.email, newUser.name).catch(err => 
+        sendWelcomeEmail(newUser.email, newUser.name).catch(err =>
             console.error('Failed to send welcome email:', err)
         );
 
@@ -120,15 +120,16 @@ export const LoginController = async (
             }
         );
 
-        // Set cookie
-        res.cookie('token', userToken, {
+        res.cookie("token", userToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 8 * 3600000, // 8 hours
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            path: "/",
+            maxAge: 8 * 3600000,
         });
 
-        sendLoginNotification(existingUser.email, existingUser.name).catch(err => 
+
+        sendLoginNotification(existingUser.email, existingUser.name).catch(err =>
             console.error('Failed to send login notification:', err)
         );
 
@@ -209,7 +210,7 @@ export const sendAccountVerificationCodeController = async (
             { where: { id: existingUser.id } }
         );
 
-        sendVerificationEmail(existingUser.email, OTP).catch(err => 
+        sendVerificationEmail(existingUser.email, OTP).catch(err =>
             console.error('Failed to send verification email:', err)
         );
 

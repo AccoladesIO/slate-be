@@ -16,11 +16,15 @@ const app = express();
 const port = process.env.PORT || 8000;
 const env = process.env.NODE_ENV || "development";
 
-// ────────────────────────────────
-// Middleware
-// ────────────────────────────────
+/**
+ * Allowed origins for CORS.
+ * @type {string[]}
+ */
 const allowedOrigins = ["https://myslate.vercel.app", "http://localhost:3000"];
 
+/**
+ * Configure and apply CORS middleware.
+ */
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -34,7 +38,9 @@ app.use(
   })
 );
 
-
+/**
+ * Apply security headers via Helmet.
+ */
 app.use(
   helmet({
     contentSecurityPolicy: env === "production" ? undefined : false,
@@ -45,34 +51,50 @@ app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ────────────────────────────────
-// Routes
-// ────────────────────────────────
+/**
+ * Application routes.
+ */
 app.use("/api/auth", authRouter);
 app.use("/api/presentation", presentationRouter);
-// share by email
 app.use("/api/sharing", sharingRouter);
-// share by link
 app.use("/api/share-link", shareLinkRouter);
 
+/**
+ * Health check route.
+ *
+ * @param {Request} _req
+ * @param {Response} res
+ */
 app.get("/", (_req: Request, res: Response) => {
   res.status(200).send("🚀 Slate API is live!");
 });
 
-// 404 Handler
+/**
+ * 404 handler for unknown routes.
+ *
+ * @param {Request} _req
+ * @param {Response} res
+ */
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ success: false, message: "Route does not exist" });
 });
 
-// Global Error Handler
+/**
+ * Global error handler middleware.
+ *
+ * @param {Error} err
+ * @param {Request} _req
+ * @param {Response} res
+ * @param {NextFunction} _next
+ */
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ success: false, message: "Internal Server Error" });
 });
 
-// ────────────────────────────────
-// Server Startup
-// ────────────────────────────────
+/**
+ * Start the server after connecting to the database and synchronizing models.
+ */
 const startServer = async () => {
   try {
     console.log("⏳ Connecting to PostgreSQL...");
@@ -90,9 +112,9 @@ const startServer = async () => {
   }
 };
 
-// ────────────────────────────────
-// Graceful Shutdown
-// ────────────────────────────────
+/**
+ * Handle SIGINT for graceful shutdown.
+ */
 process.on("SIGINT", () => {
   console.log("\n🛑 Server shutting down gracefully...");
   process.exit(0);

@@ -8,7 +8,7 @@ import {
   getShareLinkAnalytics,
 } from '../controller/shareLink.controllers';
 import { authMiddleware } from '../middleware/auth';
-
+// share by link
 const router = Router();
 router.post('/access/:token', accessViaShareLink);
 // All other routes require authentication

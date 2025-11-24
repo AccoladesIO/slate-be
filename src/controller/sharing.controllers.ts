@@ -3,6 +3,7 @@ import Presentation from '../models/presentation.model';
 import SharedPresentation from '../models/sharedPresentation.model';
 import User from '../models/user.model';
 import { Op } from 'sequelize';
+import { sendCollaborationInviteEmail } from '../utils/email.services';
 
 interface AuthRequest extends Request {
   user?: {
@@ -27,95 +28,103 @@ export const sharePresentation = async (
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Unauthorized',
+        message: 'Unauthorized'
       });
     }
 
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: 'Email is required',
+        message: 'Email is required'
       });
     }
 
     if (!['read', 'write'].includes(accessLevel)) {
       return res.status(400).json({
         success: false,
-        message: 'Access level must be either "read" or "write"',
+        message: 'Access level must be either "read" or "write"'
       });
     }
 
-    // Check if presentation exists and user is the owner
     const presentation = await Presentation.findOne({
-      where: { id: presentationId, userId },
+      where: { id: presentationId, userId }
     });
 
     if (!presentation) {
       return res.status(404).json({
         success: false,
-        message: 'Presentation not found or you do not have permission',
+        message: 'Presentation not found or you do not have permission'
       });
     }
 
-    // Find user to share with
     const userToShareWith = await User.findOne({ where: { email } });
 
     if (!userToShareWith) {
       return res.status(404).json({
         success: false,
-        message: 'User not found with this email',
+        message: 'User not found with this email'
       });
     }
 
-    // Prevent sharing with yourself
     if (userToShareWith.id === userId) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot share presentation with yourself',
+        message: 'Cannot share presentation with yourself'
       });
     }
 
-    // Check if already shared
     const existingShare = await SharedPresentation.findOne({
       where: {
         presentationId,
-        sharedWithUserId: userToShareWith.id,
-      },
+        sharedWithUserId: userToShareWith.id
+      }
     });
 
     if (existingShare) {
-      // Update existing share
       await existingShare.update({ accessLevel });
+      await sendCollaborationInviteEmail(
+        email,
+        req.user?.email || '',
+        presentation.title,
+        accessLevel,
+        presentationId
+      );
 
       return res.status(200).json({
         success: true,
         message: 'Share access updated successfully',
-        data: existingShare,
+        data: existingShare
       });
     }
 
-    // Create new share
     const share = await SharedPresentation.create({
       presentationId,
       sharedWithUserId: userToShareWith.id,
       sharedByUserId: userId,
-      accessLevel,
+      accessLevel
     });
+
+    await sendCollaborationInviteEmail(
+      email,
+      req.user?.email || '',
+      presentation.title,
+      accessLevel,
+      presentationId
+    );
 
     return res.status(201).json({
       success: true,
       message: 'Presentation shared successfully',
-      data: share,
+      data: share
     });
   } catch (error) {
     console.error('Share presentation error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to share presentation',
+      message: 'Failed to share presentation'
     });
   }
 };
-
 /**
  * Remove user access to a presentation
  */

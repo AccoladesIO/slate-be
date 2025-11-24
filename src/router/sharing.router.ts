@@ -8,7 +8,7 @@ import {
   getPublicPresentations,
 } from '../controller/sharing.controllers';
 import { authMiddleware } from '../middleware/auth';
-
+// share by email
 const router = Router();
 
 // Public route - no auth required

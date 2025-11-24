@@ -19,12 +19,21 @@ const env = process.env.NODE_ENV || "development";
 // ────────────────────────────────
 // Middleware
 // ────────────────────────────────
+const allowedOrigins = ["https://your-frontend-domain.com", "http://localhost:3000"];
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "*",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
+
 
 app.use(
   helmet({
@@ -41,7 +50,9 @@ app.use(express.urlencoded({ extended: true }));
 // ────────────────────────────────
 app.use("/api/auth", authRouter);
 app.use("/api/presentation", presentationRouter);
+// share by email
 app.use("/api/sharing", sharingRouter);
+// share by link
 app.use("/api/share-link", shareLinkRouter);
 
 app.get("/", (_req: Request, res: Response) => {

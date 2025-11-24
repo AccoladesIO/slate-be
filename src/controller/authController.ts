@@ -369,3 +369,22 @@ export const ChangePasswordController = async (
         });
     }
 };
+
+
+export const MeController = async (req: Request, res: Response) => {
+    try {
+        const token = req.cookies.token;
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const decoded: any = jwt.verify(token, process.env.JWT_SECRET_KEY!);
+        const user = await User.findByPk(decoded.id, { attributes: ['id', 'email', 'name', 'verified'] });
+
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        return res.status(200).json({ success: true, message: 'User fetched', data: user });
+    } catch (err) {
+        return res.status(401).json({ success: false, message: 'Session expired' });
+    }
+};
